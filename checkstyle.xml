@@ -235,6 +235,8 @@
             <property name="exceptionVariableName" value="expected"/>
         </module>
         <module name="CommentsIndentation"/>
+        <module name="SuppressWarningsHolder"/>
     </module>
     <module name="NewlineAtEndOfFile"/>
+    <module name="SuppressWarningsFilter"/>
 </module>
