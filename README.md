@@ -43,6 +43,8 @@ $ ./gradlew codeStyleChecks
 **ВНИМАНИЕ!** При запуске тестов или сервера в IDE необходимо передавать Java опцию `-Xmx128m`. 
 
 В своём Java package `company.vk.edu.distrib.compute.<username>` реализуйте интерфейс [`KVService`](src/main/java/company/vk/edu/distrib/compute/KVService.java) и поддержите следующий HTTP REST API протокол:
+
+* HTTP `GET /v0/status` -- `200` в нормальной ситуации, `503` в случае проблем.
 * HTTP `GET /v0/entity?id=<ID>` -- получить данные по ключу `<ID>`. Возвращает `200 OK` и данные или `404 Not Found`.
 * HTTP `PUT /v0/entity?id=<ID>` -- создать/перезаписать (upsert) данные по ключу `<ID>`. Возвращает `201 Created`.
 * HTTP `DELETE /v0/entity?id=<ID>` -- удалить данные по ключу `<ID>`. Возвращает `202 Accepted`.
