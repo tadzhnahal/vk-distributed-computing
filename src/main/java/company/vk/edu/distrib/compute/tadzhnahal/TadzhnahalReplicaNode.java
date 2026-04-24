@@ -35,15 +35,15 @@ public class TadzhnahalReplicaNode {
         enabled = false;
     }
 
-    public byte[] getRaw(String key) {
+    public byte[] getRaw(String key) throws IOException {
         return dao.get(key);
     }
 
-    public void upsertRaw(String key, byte[] value) {
+    public void upsertRaw(String key, byte[] value) throws IOException {
         dao.upsert(key, value);
     }
 
-    public void deleteRaw(String key) {
+    public void deleteRaw(String key) throws IOException {
         dao.delete(key);
     }
 
