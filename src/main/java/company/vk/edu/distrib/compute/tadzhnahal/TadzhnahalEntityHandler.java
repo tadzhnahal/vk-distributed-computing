@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpHandler;
 import company.vk.edu.distrib.compute.Dao;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.NoSuchElementException;
 
 public class TadzhnahalEntityHandler implements HttpHandler {
@@ -19,18 +20,18 @@ public class TadzhnahalEntityHandler implements HttpHandler {
 
     private final String localEndpoint;
     private final Dao<byte[]> dao;
-    private final TadzhnahalShardSelector shardSelector;
+    private final TadzhnahalRendezvousHashing rendezvousHashing;
     private final TadzhnahalProxyClient proxyClient;
 
     public TadzhnahalEntityHandler(
             String localEndpoint,
             Dao<byte[]> dao,
-            TadzhnahalShardSelector shardSelector,
+            TadzhnahalRendezvousHashing rendezvousHashing,
             TadzhnahalProxyClient proxyClient
     ) {
         this.localEndpoint = localEndpoint;
         this.dao = dao;
-        this.shardSelector = shardSelector;
+        this.rendezvousHashing = rendezvousHashing;
         this.proxyClient = proxyClient;
     }
 
@@ -50,7 +51,7 @@ public class TadzhnahalEntityHandler implements HttpHandler {
                     return;
                 }
 
-                String targetEndpoint = shardSelector.select(id);
+                String targetEndpoint = rendezvousHashing.select(id);
 
                 if (localEndpoint.equals(targetEndpoint)) {
                     handleLocal(exchange, id);
@@ -103,30 +104,26 @@ public class TadzhnahalEntityHandler implements HttpHandler {
         String method = exchange.getRequestMethod();
         TadzhnahalProxyClient.ProxyResponse response;
 
-        try {
-            if (METHOD_GET.equals(method)) {
-                response = proxyClient.get(targetEndpoint, id);
-                sendResponse(exchange, response.statusCode(), response.body());
-                return;
-            }
-
-            if (METHOD_PUT.equals(method)) {
-                byte[] value = exchange.getRequestBody().readAllBytes();
-                response = proxyClient.put(targetEndpoint, id, value);
-                sendResponse(exchange, response.statusCode(), response.body());
-                return;
-            }
-
-            if (METHOD_DELETE.equals(method)) {
-                response = proxyClient.delete(targetEndpoint, id);
-                sendResponse(exchange, response.statusCode(), response.body());
-                return;
-            }
-
-            sendResponse(exchange, 405, new byte[0]);
-        } catch (IOException e) {
-            sendResponse(exchange, 504, new byte[0]);
+        if (METHOD_GET.equals(method)) {
+            response = proxyClient.get(targetEndpoint, id);
+            sendResponse(exchange, response.statusCode(), response.body());
+            return;
         }
+
+        if (METHOD_PUT.equals(method)) {
+            byte[] value = exchange.getRequestBody().readAllBytes();
+            response = proxyClient.put(targetEndpoint, id, value);
+            sendResponse(exchange, response.statusCode(), response.body());
+            return;
+        }
+
+        if (METHOD_DELETE.equals(method)) {
+            response = proxyClient.delete(targetEndpoint, id);
+            sendResponse(exchange, response.statusCode(), response.body());
+            return;
+        }
+
+        sendResponse(exchange, 405, new byte[0]);
     }
 
     private boolean isInternalRequest(HttpExchange exchange) {
@@ -160,12 +157,19 @@ public class TadzhnahalEntityHandler implements HttpHandler {
 
     private void sendResponse(HttpExchange exchange, int code, byte[] body) throws IOException {
         byte[] responseBody = body == null ? new byte[0] : body;
-        exchange.sendResponseHeaders(code, responseBody.length);
+
+        if (responseBody.length == 0 && code >= 400) {
+            responseBody = new byte[] {0};
+        }
 
         if (responseBody.length == 0) {
+            exchange.sendResponseHeaders(code, -1);
             return;
         }
 
-        exchange.getResponseBody().write(responseBody);
+        exchange.sendResponseHeaders(code, responseBody.length);
+        try (OutputStream outputStream = exchange.getResponseBody()) {
+            outputStream.write(responseBody);
+        }
     }
 }

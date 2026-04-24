@@ -43,26 +43,23 @@ public class TadzhnahalReplicaManager {
         replica(nodeId).enable();
     }
 
+    public boolean isReplicaEnabled(int nodeId) {
+        return replica(nodeId).enabled();
+    }
+
     public long nextVersion() {
         return versionCounter.incrementAndGet();
     }
 
-    public List<Integer> selectReplicaIds(String key, int count) {
-        return replicaSelector.select(key, count);
-    }
-
-    public List<TadzhnahalReplicaNode> selectReplicaNodes(String key, int count) {
-        List<Integer> replicaIds = selectReplicaIds(key, count);
-        List<TadzhnahalReplicaNode> result = new ArrayList<>(replicaIds.size());
-
-        for (Integer replicaId : replicaIds) {
-            result.add(replica(replicaId));
-        }
-
-        return List.copyOf(result);
+    public List<Integer> replicaIdsForKey(String key) {
+        return replicaSelector.select(key, replicaCount);
     }
 
     public TadzhnahalReplicaRecord readRecord(int nodeId, String key) throws IOException {
+        if (!isReplicaEnabled(nodeId)) {
+            throw new IOException("Replica is disabled");
+        }
+
         byte[] rawValue = replica(nodeId).getRaw(key);
         if (rawValue == null) {
             return null;
@@ -72,6 +69,10 @@ public class TadzhnahalReplicaManager {
     }
 
     public void writeRecord(int nodeId, String key, TadzhnahalReplicaRecord record) throws IOException {
+        if (!isReplicaEnabled(nodeId)) {
+            throw new IOException("Replica is disabled");
+        }
+
         byte[] rawValue = replicaRecordCodec.encode(record);
         replica(nodeId).upsertRaw(key, rawValue);
     }

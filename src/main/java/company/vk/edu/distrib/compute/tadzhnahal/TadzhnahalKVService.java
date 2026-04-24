@@ -69,15 +69,24 @@ public class TadzhnahalKVService implements ReplicatedService {
         try {
             server = HttpServer.create(new InetSocketAddress(port), 0);
             server.createContext(STATUS_PATH, this::handleStatus);
-            server.createContext(
-                    ENTITY_PATH,
-                    new TadzhnahalEntityHandler(
-                            localEndpoint,
-                            replicaManager.replicaNodes().get(0).dao(),
-                            rendezvousHashing,
-                            proxyClient
-                    )
-            );
+
+            if (clusterEndpoints.size() == 1) {
+                server.createContext(
+                        ENTITY_PATH,
+                        new TadzhnahalReplicatedEntityHandler(replicaManager)
+                );
+            } else {
+                server.createContext(
+                        ENTITY_PATH,
+                        new TadzhnahalEntityHandler(
+                                localEndpoint,
+                                replicaManager.replicaNodes().get(0).dao(),
+                                rendezvousHashing,
+                                proxyClient
+                        )
+                );
+            }
+
             server.start();
             started = true;
         } catch (IOException e) {
