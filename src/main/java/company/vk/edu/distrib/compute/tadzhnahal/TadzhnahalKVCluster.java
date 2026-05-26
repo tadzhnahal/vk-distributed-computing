@@ -10,8 +10,9 @@ import java.util.List;
 import java.util.Map;
 
 public class TadzhnahalKVCluster implements KVCluster {
-    private static final String LOCALHOST = "http://localhost:";
-    private static final String GRPC_PORT_PARAM = "?grpcPort=";
+    private static final String LOCALHOST = "localhost";
+    private static final String HTTP_PREFIX = "http://";
+    private static final String GRPC_PORT_PREFIX = "grpcPort=";
     private static final int GRPC_PORT_OFFSET = 1000;
 
     private final TadzhnahalKVServiceFactory factory;
@@ -109,7 +110,7 @@ public class TadzhnahalKVCluster implements KVCluster {
     }
 
     private static String buildEndpoint(int port, int grpcPort) {
-        return LOCALHOST + port + GRPC_PORT_PARAM + grpcPort;
+        return HTTP_PREFIX + GRPC_PORT_PREFIX + grpcPort + "@" + LOCALHOST + ":" + port;
     }
 
     private static int buildGrpcPort(int port) {
