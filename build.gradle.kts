@@ -1,4 +1,6 @@
 import com.google.protobuf.gradle.id
+import org.gradle.api.plugins.quality.Checkstyle
+import org.gradle.api.plugins.quality.Pmd
 
 plugins {
     java
@@ -138,6 +140,14 @@ tasks.register("codeStyleChecks") {
 
 tasks.check {
     dependsOn(tasks.test, integrationTest, "codeStyleChecks")
+}
+
+tasks.named<Checkstyle>("checkstyleMain") {
+    source = fileTree("src/main/java")
+}
+
+tasks.named<Pmd>("pmdMain") {
+    source = fileTree("src/main/java")
 }
 
 tasks.named("pmdIntegrationTest") {
