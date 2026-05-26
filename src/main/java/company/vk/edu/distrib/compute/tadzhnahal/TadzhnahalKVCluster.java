@@ -11,10 +11,13 @@ import java.util.Map;
 
 public class TadzhnahalKVCluster implements KVCluster {
     private static final String LOCALHOST = "http://localhost:";
+    private static final String GRPC_PORT_PARAM = "?grpcPort=";
+    private static final int GRPC_PORT_OFFSET = 1000;
 
     private final TadzhnahalKVServiceFactory factory;
     private final List<String> endpoints;
     private final Map<String, Integer> portsByEndpoint;
+    private final Map<String, Integer> grpcPortsByEndpoint;
     private final Map<String, KVService> startedNodes;
 
     public TadzhnahalKVCluster(List<Integer> ports) {
@@ -32,6 +35,7 @@ public class TadzhnahalKVCluster implements KVCluster {
         this.factory = new TadzhnahalKVServiceFactory(shardingAlgorithm);
         this.endpoints = new ArrayList<>();
         this.portsByEndpoint = new LinkedHashMap<>();
+        this.grpcPortsByEndpoint = new LinkedHashMap<>();
         this.startedNodes = new LinkedHashMap<>();
 
         for (Integer port : ports) {
@@ -39,13 +43,16 @@ public class TadzhnahalKVCluster implements KVCluster {
                 throw new IllegalArgumentException("Port must not be null");
             }
 
-            String endpoint = LOCALHOST + port;
+            int grpcPort = buildGrpcPort(port);
+            String endpoint = buildEndpoint(port, grpcPort);
+
             if (portsByEndpoint.containsKey(endpoint)) {
                 throw new IllegalArgumentException("Duplicate endpoint: " + endpoint);
             }
 
             endpoints.add(endpoint);
             portsByEndpoint.put(endpoint, port);
+            grpcPortsByEndpoint.put(endpoint, grpcPort);
         }
     }
 
@@ -63,12 +70,14 @@ public class TadzhnahalKVCluster implements KVCluster {
         }
 
         Integer port = portsByEndpoint.get(endpoint);
-        if (port == null) {
+        Integer grpcPort = grpcPortsByEndpoint.get(endpoint);
+
+        if (port == null || grpcPort == null) {
             throw new IllegalArgumentException("Unknown endpoint: " + endpoint);
         }
 
         try {
-            KVService service = factory.create(port, endpoints);
+            KVService service = factory.create(port, grpcPort, endpoints);
             service.start();
             startedNodes.put(endpoint, service);
         } catch (IOException e) {
@@ -97,5 +106,17 @@ public class TadzhnahalKVCluster implements KVCluster {
     @Override
     public List<String> getEndpoints() {
         return new ArrayList<>(endpoints);
+    }
+
+    private static String buildEndpoint(int port, int grpcPort) {
+        return LOCALHOST + port + GRPC_PORT_PARAM + grpcPort;
+    }
+
+    private static int buildGrpcPort(int port) {
+        if (port < 64536) {
+            return port + GRPC_PORT_OFFSET;
+        }
+
+        return port - GRPC_PORT_OFFSET;
     }
 }

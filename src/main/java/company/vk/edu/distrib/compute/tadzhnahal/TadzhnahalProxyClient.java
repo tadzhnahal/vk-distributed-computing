@@ -13,6 +13,7 @@ public class TadzhnahalProxyClient {
     private static final String ENTITY_PATH = "/v0/entity?id=";
     private static final String INTERNAL_REQUEST_HEADER = "X-Internal-Request";
     private static final String INTERNAL_REQUEST_VALUE = "true";
+    private static final char QUERY_SEPARATOR = '?';
 
     private final HttpClient httpClient;
 
@@ -67,11 +68,20 @@ public class TadzhnahalProxyClient {
 
     private HttpRequest.Builder requestBuilder(String endpoint, String id) {
         String encodedId = URLEncoder.encode(id, StandardCharsets.UTF_8);
-        URI uri = URI.create(endpoint + ENTITY_PATH + encodedId);
+        URI uri = URI.create(httpEndpoint(endpoint) + ENTITY_PATH + encodedId);
 
         return HttpRequest.newBuilder(uri)
                 .timeout(Duration.ofSeconds(2))
                 .header(INTERNAL_REQUEST_HEADER, INTERNAL_REQUEST_VALUE);
+    }
+
+    private String httpEndpoint(String endpoint) {
+        int queryIndex = endpoint.indexOf(QUERY_SEPARATOR);
+        if (queryIndex < 0) {
+            return endpoint;
+        }
+
+        return endpoint.substring(0, queryIndex);
     }
 
     private ProxyResponse toProxyResponse(HttpResponse<byte[]> response) {

@@ -17,6 +17,8 @@ public class TadzhnahalKVService implements ReplicatedService {
     private static final String ENTITY_PATH = "/v0/entity";
     private static final String METHOD_GET = "GET";
     private static final String LOCALHOST = "http://localhost:";
+    private static final String GRPC_PORT_PARAM = "?grpcPort=";
+    private static final int GRPC_PORT_OFFSET = 1000;
 
     private final int port;
     private final int grpcPort;
@@ -33,7 +35,13 @@ public class TadzhnahalKVService implements ReplicatedService {
     private boolean started;
 
     public TadzhnahalKVService(int port, Path rootDir, int replicaCount) throws IOException {
-        this(port, rootDir, replicaCount, buildGrpcPort(port), List.of(buildEndpoint(port)));
+        this(
+                port,
+                rootDir,
+                replicaCount,
+                buildGrpcPort(port),
+                List.of(buildEndpoint(port, buildGrpcPort(port)))
+        );
     }
 
     public TadzhnahalKVService(
@@ -73,7 +81,7 @@ public class TadzhnahalKVService implements ReplicatedService {
         this.rootDir = rootDir;
         this.replicaManager = new TadzhnahalReplicaManager(rootDir, replicaCount);
 
-        this.localEndpoint = buildEndpoint(port);
+        this.localEndpoint = buildEndpoint(port, grpcPort);
         this.clusterEndpoints = prepareClusterEndpoints(clusterEndpoints, localEndpoint);
         this.rendezvousHashing = new TadzhnahalRendezvousHashing(this.clusterEndpoints);
         this.proxyClient = new TadzhnahalProxyClient();
@@ -202,16 +210,16 @@ public class TadzhnahalKVService implements ReplicatedService {
         exchange.sendResponseHeaders(code, -1);
     }
 
-    private static String buildEndpoint(int port) {
-        return LOCALHOST + port;
+    private static String buildEndpoint(int port, int grpcPort) {
+        return LOCALHOST + port + GRPC_PORT_PARAM + grpcPort;
     }
 
     private static int buildGrpcPort(int port) {
         if (port < 64536) {
-            return port + 1000;
+            return port + GRPC_PORT_OFFSET;
         }
 
-        return port - 1000;
+        return port - GRPC_PORT_OFFSET;
     }
 
     private static List<String> prepareClusterEndpoints(
