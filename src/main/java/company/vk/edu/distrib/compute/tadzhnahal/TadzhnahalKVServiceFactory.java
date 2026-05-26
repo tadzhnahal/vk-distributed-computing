@@ -38,6 +38,21 @@ public class TadzhnahalKVServiceFactory extends KVServiceFactory {
         );
     }
 
+    public KVService create(
+            int port,
+            int grpcPort,
+            List<String> clusterEndpoints
+    ) throws IOException {
+        Path rootDir = buildRootDir(port);
+        return new TadzhnahalKVService(
+                port,
+                rootDir,
+                DEFAULT_REPLICA_COUNT,
+                grpcPort,
+                clusterEndpoints
+        );
+    }
+
     public TadzhnahalShardingAlgorithm shardingAlgorithm() {
         return shardingAlgorithm;
     }

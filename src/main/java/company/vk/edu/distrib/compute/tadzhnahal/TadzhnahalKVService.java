@@ -3,6 +3,8 @@ package company.vk.edu.distrib.compute.tadzhnahal;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import company.vk.edu.distrib.compute.ReplicatedService;
+import io.grpc.Server;
+import io.grpc.ServerBuilder;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -17,6 +19,7 @@ public class TadzhnahalKVService implements ReplicatedService {
     private static final String LOCALHOST = "http://localhost:";
 
     private final int port;
+    private final int grpcPort;
     private final Path rootDir;
     private final TadzhnahalReplicaManager replicaManager;
 
@@ -26,16 +29,27 @@ public class TadzhnahalKVService implements ReplicatedService {
     private final TadzhnahalProxyClient proxyClient;
 
     private HttpServer server;
+    private Server grpcServer;
     private boolean started;
 
     public TadzhnahalKVService(int port, Path rootDir, int replicaCount) throws IOException {
-        this(port, rootDir, replicaCount, List.of(buildEndpoint(port)));
+        this(port, rootDir, replicaCount, buildGrpcPort(port), List.of(buildEndpoint(port)));
     }
 
     public TadzhnahalKVService(
             int port,
             Path rootDir,
             int replicaCount,
+            List<String> clusterEndpoints
+    ) throws IOException {
+        this(port, rootDir, replicaCount, buildGrpcPort(port), clusterEndpoints);
+    }
+
+    public TadzhnahalKVService(
+            int port,
+            Path rootDir,
+            int replicaCount,
+            int grpcPort,
             List<String> clusterEndpoints
     ) throws IOException {
         if (rootDir == null) {
@@ -46,11 +60,16 @@ public class TadzhnahalKVService implements ReplicatedService {
             throw new IllegalArgumentException("Replica count must be positive");
         }
 
+        if (grpcPort <= 0 || grpcPort >= 65536) {
+            throw new IllegalArgumentException("Grpc port is out of range");
+        }
+
         if (clusterEndpoints == null || clusterEndpoints.isEmpty()) {
             throw new IllegalArgumentException("Cluster endpoints must not be empty");
         }
 
         this.port = port;
+        this.grpcPort = grpcPort;
         this.rootDir = rootDir;
         this.replicaManager = new TadzhnahalReplicaManager(rootDir, replicaCount);
 
@@ -67,29 +86,11 @@ public class TadzhnahalKVService implements ReplicatedService {
         }
 
         try {
-            server = HttpServer.create(new InetSocketAddress(port), 0);
-            server.createContext(STATUS_PATH, this::handleStatus);
-
-            if (clusterEndpoints.size() == 1) {
-                server.createContext(
-                        ENTITY_PATH,
-                        new TadzhnahalReplicatedEntityHandler(replicaManager)
-                );
-            } else {
-                server.createContext(
-                        ENTITY_PATH,
-                        new TadzhnahalEntityHandler(
-                                localEndpoint,
-                                replicaManager.replicaNodes().get(0).dao(),
-                                rendezvousHashing,
-                                proxyClient
-                        )
-                );
-            }
-
-            server.start();
+            startGrpcServer();
+            startHttpServer();
             started = true;
         } catch (IOException e) {
+            stopGrpcServer();
             throw new IllegalStateException("Cannot start server", e);
         }
     }
@@ -100,14 +101,22 @@ public class TadzhnahalKVService implements ReplicatedService {
             throw new IllegalStateException("Server is not started");
         }
 
-        server.stop(0);
+        if (server != null) {
+            server.stop(0);
+            server = null;
+        }
+
+        stopGrpcServer();
         started = false;
-        server = null;
     }
 
     @Override
     public int port() {
         return port;
+    }
+
+    public int grpcPort() {
+        return grpcPort;
     }
 
     @Override
@@ -133,6 +142,46 @@ public class TadzhnahalKVService implements ReplicatedService {
         return replicaManager;
     }
 
+    private void startGrpcServer() throws IOException {
+        grpcServer = ServerBuilder.forPort(grpcPort)
+                .addService(new TadzhnahalInternalKvService(replicaManager.replicaNodes().get(0).dao()))
+                .build()
+                .start();
+    }
+
+    private void stopGrpcServer() {
+        if (grpcServer == null) {
+            return;
+        }
+
+        grpcServer.shutdownNow();
+        grpcServer = null;
+    }
+
+    private void startHttpServer() throws IOException {
+        server = HttpServer.create(new InetSocketAddress(port), 0);
+        server.createContext(STATUS_PATH, this::handleStatus);
+
+        if (clusterEndpoints.size() == 1) {
+            server.createContext(
+                    ENTITY_PATH,
+                    new TadzhnahalReplicatedEntityHandler(replicaManager)
+            );
+        } else {
+            server.createContext(
+                    ENTITY_PATH,
+                    new TadzhnahalEntityHandler(
+                            localEndpoint,
+                            replicaManager.replicaNodes().get(0).dao(),
+                            rendezvousHashing,
+                            proxyClient
+                    )
+            );
+        }
+
+        server.start();
+    }
+
     private void handleStatus(HttpExchange exchange) throws IOException {
         try (exchange) {
             if (!STATUS_PATH.equals(exchange.getRequestURI().getPath())) {
@@ -155,6 +204,14 @@ public class TadzhnahalKVService implements ReplicatedService {
 
     private static String buildEndpoint(int port) {
         return LOCALHOST + port;
+    }
+
+    private static int buildGrpcPort(int port) {
+        if (port < 64536) {
+            return port + 1000;
+        }
+
+        return port - 1000;
     }
 
     private static List<String> prepareClusterEndpoints(
