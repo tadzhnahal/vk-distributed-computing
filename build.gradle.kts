@@ -21,7 +21,6 @@ repositories {
     mavenCentral()
 }
 
-
 val reactiveGrpcVersion = "1.2.4"
 val grpcVersion = "1.58.0"
 val protobufVersion = "3.4.0"
@@ -45,9 +44,15 @@ dependencies {
     compileOnly("javax.annotation:javax.annotation-api:1.3.2")
     implementation("io.projectreactor:reactor-core:3.8.5")
 
+    implementation("org.apache.kafka:kafka-clients:4.2.0")
+
     testImplementation(platform("org.junit:junit-bom:6.0.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+    testImplementation("org.testcontainers:testcontainers:2.0.5")
+    testImplementation("org.testcontainers:junit-jupiter:1.21.4")
+    testImplementation("org.testcontainers:kafka:1.21.4")
 }
 
 protobuf {
@@ -85,7 +90,6 @@ val integrationTestRuntimeOnly by configurations.getting
 
 configurations["integrationTestRuntimeOnly"].extendsFrom(configurations.runtimeOnly.get(), configurations.testRuntimeOnly.get())
 
-
 tasks.test {
     maxHeapSize = "128m"
     useJUnitPlatform()
@@ -119,7 +123,6 @@ checkstyle {
     configFile = project.layout.projectDirectory.file("checkstyle.xml").asFile
     maxWarnings = 0
 }
-
 
 pmd {
     isConsoleOutput = true
